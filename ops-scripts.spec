@@ -21,3 +21,4 @@ make install DESTDIR="%{buildroot}" PREFIX="%{prefix}"
 
 %files
 %{_bindir}/*
+%{_defaultdocdir}/*
