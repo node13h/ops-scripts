@@ -51,7 +51,7 @@ EOF
 }
 
 
-if [[ -n "${BASH_SOURCE:-}" && "${0}" = "${BASH_SOURCE}" ]]; then
+if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
     if [[ "${#}" -gt 0 ]]; then
         case "${1}" in
             update)
@@ -65,7 +65,7 @@ if [[ -n "${BASH_SOURCE:-}" && "${0}" = "${BASH_SOURCE}" ]]; then
 
         shift
 
-        automated.sh -l "${BASH_SOURCE}" -c "${COMMAND}" -s "${@}"
+        automated.sh -l "${BASH_SOURCE[0]}" -c "${COMMAND}" -s "${@}"
     else
         display_usage_and_exit
     fi

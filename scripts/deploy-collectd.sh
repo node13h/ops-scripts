@@ -97,7 +97,7 @@ local_main () {
 
 # For convenience this file is structured in such a way that the locally executed
 # functions are above this block and the remotely executed functions are below
-if [[ "${BASH_SOURCE[0]:-}" = "${0}" ]]; then
+if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
 
     # Source some useful functions like throw
 
