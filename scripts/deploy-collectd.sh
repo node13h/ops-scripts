@@ -104,7 +104,7 @@ if [[ "${BASH_SOURCE[0]:-}" = "${0}" ]]; then
     # shellcheck disable=SC1091
     source automated-config.sh
     # shellcheck disable=SC1090
-    source "${LIBDIR%/}/libautomated.sh"
+    source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
 
     local_main "${@}"
 fi
