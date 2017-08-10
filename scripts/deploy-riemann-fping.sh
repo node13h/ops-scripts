@@ -27,13 +27,13 @@ OPTIONS
 
 EXAMPLES
 
-        ${0} \
-          --ping www.google.com \
-          --ping www.kernel.org \
-          'My CA' \
-          riemann.example.com \
-          probe1.example.com \
-          probe2.example.com \
+        ${0} \\
+          --ping www.google.com \\
+          --ping www.kernel.org \\
+          'My CA' \\
+          riemann.example.com \\
+          probe1.example.com \\
+          probe2.example.com \\
           -v
 EOF
 
