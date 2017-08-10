@@ -6,6 +6,7 @@ URL:       https://github.com/node13h/ops-scripts
 License:   GPLv3+
 BuildArch: noarch
 Source0:   ops-scripts-%{full_version}.tar.gz
+Requires: automated
 
 %description
 A collection of the automated.sh-based scripts
