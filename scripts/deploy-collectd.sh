@@ -13,6 +13,24 @@ display_usage_and_exit () {
     cat <<EOF
 Usage: ${0} ${POSITIONAL_ARGS[*]//_/-} [AUTOMATED-ARGS]
 
+automated.sh-based script to deploy the CollectD instance to target(s) and
+configure it to send the data to RIEMANN (over the SSL).
+
+This script will decrypt the SSL keys on the fly using the pass
+tool (https://www.passwordstore.org/).
+
+ENVIRONMENT VARIABLES
+        PASS_NAMESPACE          'pass' utility namespace to look for
+                                the key passwords in. The script will use
+                                the PASS_NAMESPACE/CA_NAME/TARGET path to look
+                                for the password.
+        CA_DIR                  Base directory containing the CAs (easyrsa
+                                directory layout). Used to produce the
+                                default value of PKI_DIR.
+        PKI_DIR                 Directory to look for the SSL keys and
+                                certificates in. Derived from the CA_DIR by
+                                default. Keys are expeted at PKI_DIR/private
+                                and certificates are expected at PKI_DIR/issued.
 EOF
 
     exit "${1:-0}"
