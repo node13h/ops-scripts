@@ -75,7 +75,8 @@ local_main () {
     done
 
     PASS_NAMESPACE="${PASS_NAMESPACE:-CA/${CA_NAME}}"
-    PKI_DIR="${PKI_DIR:-${HOME}/CA/${CA_NAME}/pki}"
+    CA_DIR="${CA_DIR:-${HOME%/}/CA}"
+    PKI_DIR="${PKI_DIR:-${CA_DIR%/}/${CA_NAME}/pki}"
 
     export -f decrypted_rsa_key
     export -f drag_ssl_files
