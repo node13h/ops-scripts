@@ -15,7 +15,7 @@ Usage: ${0} ${POSITIONAL_ARGS[*]//_/-} [AUTOMATED-ARGS]
 
 EOF
 
-    return "${1:-0}"
+    exit "${1:-0}"
 }
 
 decrypted_rsa_key () {

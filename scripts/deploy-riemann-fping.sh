@@ -37,7 +37,7 @@ EXAMPLES
           -v
 EOF
 
-    return "${1:-0}"
+    exit "${1:-0}"
 }
 
 decrypted_rsa_key () {
