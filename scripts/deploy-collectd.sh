@@ -206,6 +206,7 @@ setup_collectd () {
         "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-client.crt" \
         "${FACT_PKI_CERTS%/}/${CA_NAME}.crt" | to_file /etc/collectd.d/riemann.conf
 
+    cmd systemctl enable collectd
     systemctl -q is-active collectd || cmd systemctl start collectd
 }
 
