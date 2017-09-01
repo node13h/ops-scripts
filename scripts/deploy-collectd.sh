@@ -190,7 +190,7 @@ EOF
 setup_collectd () {
     msg "Setting up CollectD"
 
-    packages_ensure present collectd collectd-write_riemann
+    packages_ensure present collectd collectd-write_riemann collectd-sensors
 
     if [[ "${FACT_OS_FAMILY}" = "RedHat" ]]; then
         cmd setsebool -P collectd_tcp_network_connect 1
