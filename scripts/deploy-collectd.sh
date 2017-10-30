@@ -128,7 +128,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
     local_main "${@}"
 fi
 
-RESTART_SERVICES=()
+declare -A SYSTEMCTL_ACTIONS
 
 drop_ssl_files () {
     drop ssl-key "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" 0600
@@ -196,7 +196,7 @@ EOF
 }
 
 handle_riemann_config_change () {
-    ! systemctl -q is-active collectd || RESTART_SERVICES+=(collectd)
+    ! systemctl -q is-active collectd || SYSTEMCTL_ACTIONS[collectd]=try-restart
 }
 
 setup_collectd () {
@@ -233,7 +233,7 @@ main () {
     drop_ssl_files
     setup_collectd
 
-    [[ "${#RESTART_SERVICES[@]}" -eq 0 ]] || for service in "${RESTART_SERVICES[@]}"; do
-        cmd systemctl try-restart "${service}"
+    [[ "${#SYSTEMCTL_ACTIONS[@]}" -eq 0 ]] || for service in "${!SYSTEMCTL_ACTIONS[@]}"; do
+        cmd systemctl "${SYSTEMCTL_ACTIONS[${service}]}" "${service}"
     done
 }
