@@ -128,6 +128,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
     local_main "${@}"
 fi
 
+RESTART_SERVICES=()
 
 drop_ssl_files () {
     drop ssl-key "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" 0600
@@ -187,6 +188,10 @@ LoadPlugin write_riemann
 EOF
 }
 
+handle_riemann_config_change () {
+    ! systemctl -q is-active collectd || RESTART_SERVICES+=(collectd)
+}
+
 setup_collectd () {
     msg "Setting up CollectD"
 
@@ -196,15 +201,17 @@ setup_collectd () {
         cmd setsebool -P collectd_tcp_network_connect 1
     fi
 
-    collectd_sys_config | to_file /etc/collectd.d/sys.conf
-    collectd_interface_config | to_file /etc/collectd.d/interface.conf
+    to_file /etc/collectd.d/sys.conf handle_riemann_config_change < <(collectd_sys_config)
+    to_file /etc/collectd.d/interface.conf handle_riemann_config_change < <(collectd_interface_config)
 
     # shellcheck disable=SC2153
-    collectd_riemann_write_config \
-        "${RIEMANN_SERVER}" \
-        "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" \
-        "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-client.crt" \
-        "${FACT_PKI_CERTS%/}/${CA_NAME}.crt" | to_file /etc/collectd.d/riemann.conf
+    to_file /etc/collectd.d/riemann.conf handle_riemann_config_change < <(
+        collectd_riemann_write_config \
+            "${RIEMANN_SERVER}" \
+            "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" \
+            "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-client.crt" \
+            "${FACT_PKI_CERTS%/}/${CA_NAME}.crt"
+    )
 
     cmd systemctl enable collectd
     systemctl -q is-active collectd || cmd systemctl start collectd
@@ -212,8 +219,14 @@ setup_collectd () {
 
 
 main () {
+    local service
+
     packages_ensure present patch
 
     drop_ssl_files
     setup_collectd
+
+    [[ "${#RESTART_SERVICES[@]}" -eq 0 ]] || for service in "${RESTART_SERVICES[@]}"; do
+        cmd systemctl try-restart "${service}"
+    done
 }
