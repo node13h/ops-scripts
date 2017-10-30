@@ -148,7 +148,7 @@ LoadPlugin swap
 <Plugin "df">
   FSType "tmpfs"
   FSType "devtmpfs"
-  IgnoreSelected false
+  IgnoreSelected true
 </Plugin>
 EOF
 }
