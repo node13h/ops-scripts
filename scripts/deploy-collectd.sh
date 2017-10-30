@@ -144,6 +144,12 @@ LoadPlugin load
 LoadPlugin memory
 LoadPlugin processes
 LoadPlugin swap
+
+<Plugin "df">
+  FSType "tmpfs"
+  FSType "devtmpfs"
+  IgnoreSelected false
+</Plugin>
 EOF
 }
 
