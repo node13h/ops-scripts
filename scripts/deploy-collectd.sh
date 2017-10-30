@@ -184,6 +184,7 @@ LoadPlugin write_riemann
         TLSKeyFile "${key}"
         StoreRates true
         AlwaysAppendDS false
+        TTLFactor 3.0
     </Node>
     Tag "collectd"
 </Plugin>
