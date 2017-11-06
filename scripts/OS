@@ -14,6 +14,14 @@
 set -eu
 set -o pipefail
 
+multiplexer_ensure_installed () {
+    local first_multiplexer
+    if ! multiplexer_present >/dev/null; then
+        read -r first_multiplexer < <(supported_multiplexers)
+        packages_ensure present "${first_multiplexer}"
+    fi
+}
+
 
 os_update () {
 
@@ -52,6 +60,10 @@ EOF
 
 
 if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
+
+    # shellcheck disable=SC1091
+    source automated-extras-config.sh
+
     if [[ "${#}" -gt 0 ]]; then
         case "${1}" in
             update)
@@ -65,7 +77,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
 
         shift
 
-        automated.sh -l "${BASH_SOURCE[0]}" -c "${COMMAND}" -s "${@}"
+        automated.sh -l "${BASH_SOURCE[0]}" -l "${AUTOMATED_EXTRAS_LIBDIR}" -c "${COMMAND}" -s "${@}"
     else
         display_usage_and_exit
     fi
