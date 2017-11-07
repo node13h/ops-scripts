@@ -184,7 +184,8 @@ LoadPlugin write_riemann
         TLSKeyFile "${key}"
         StoreRates true
         AlwaysAppendDS false
-        BatchFlushTimeout 5
+        TTLFactor 5.0
+        BatchFlushTimeout 10
     </Node>
     Tag "collectd"
 </Plugin>
