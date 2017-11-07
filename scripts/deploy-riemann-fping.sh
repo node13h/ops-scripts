@@ -3,86 +3,38 @@
 # MIT license
 # Copyright 2017 Sergej Alikov <sergej.alikov@gmail.com>
 
-
 set -euo pipefail
-
-POSITIONAL_ARGS=('CA_NAME' 'RIEMANN_SERVER')
-DEST_DIR=/opt/riemann-fping
-FPING_INTERVAL=10
-
-PING_TARGETS=()
 
 
 display_usage_and_exit () {
     cat <<EOF
-Usage: ${0} [OPTIONS] ${POSITIONAL_ARGS[*]//_/-} [AUTOMATED-ARGS]
+Usage: ${0} [OPTIONS] RIEMANN-SERVER [AUTOMATED-ARGS]
 
-automated.sh-based script to deploy the riemann-fping instance to target(s) and
-configure it to send the data to RIEMANN (over the SSL).
-
-This script will decrypt the SSL keys on the fly using the pass
-tool (https://www.passwordstore.org/).
-
+Deploy the riemann-fping instance to target(s) and configure it to send
+the data to a RIEMANN instance (over the SSL).
 
 OPTIONS
         -h,--help                       Show help text and exit.
         --ping ADDRESS                  Ping ADDRESS. At least one is required.
                                         May be specified multiple times.
 
-ENVIRONMENT VARIABLES
-        PASS_NAMESPACE          'pass' utility namespace to look for
-                                the key passwords in. The script will use
-                                the PASS_NAMESPACE/CA_NAME/TARGET path to look
-                                for the password.
-        CA_DIR                  Base directory containing the CAs (easyrsa
-                                directory layout). Used to produce the
-                                default value of PKI_DIR.
-        PKI_DIR                 Directory to look for the SSL keys and
-                                certificates in. Derived from the CA_DIR by
-                                default. Keys are expeted at PKI_DIR/private
-                                and certificates are expected at PKI_DIR/issued.
-
 EXAMPLES
 
         ${0} \\
           --ping www.google.com \\
           --ping www.kernel.org \\
-          'My CA' \\
           riemann.example.com \\
           probe1.example.com \\
           probe2.example.com \\
           -v
+
+AUTOMATING
+
+        Run riemann-ssl-files-macro.sh --help to see more help on
+        environment variables.
 EOF
 
     exit "${1:-0}"
-}
-
-decrypted_rsa_key () {
-    local key_file="${1}"
-    local passphrase="${2}"
-
-    openssl rsa -passin stdin -in "${key_file}" <<< "${passphrase}"
-}
-
-drag_ssl_files () {
-    local target="${1}"
-    local pass_namespace="${2}"
-    local pki_dir="${3}"
-
-    local passphrase cacert cert key pass_name address
-
-    address=$(target_address_only "${target}")
-
-    cacert="${pki_dir%/}/ca.crt"
-    cert="${pki_dir%/}/issued/${address}.crt"
-    key="${pki_dir%/}/private/${address}.key"
-    pass_name="${pass_namespace%/}/${address}"
-
-    passphrase=$(pass "${pass_name}")
-
-    file_as_function <(decrypted_rsa_key "${key}" "${passphrase}") ssl-key
-    file_as_function "${cert}" ssl-cert
-    file_as_function "${cacert}" ssl-cacert
 }
 
 ping_targets () {
@@ -91,16 +43,26 @@ ping_targets () {
     declared_var PING_TARGETS
 }
 
-local_main () {
-    local arg
+# For convenience this file is structured in such a way that the locally executed
+# functions are above this block and the remotely executed functions are below
+if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
 
-    local -a args=("${POSITIONAL_ARGS[@]}")
+    [[ "${#}" -gt 1 ]] || display_usage_and_exit 1
 
-    [[ "${#}" -gt "${#args[@]}" ]] || display_usage_and_exit 1
+
+    # shellcheck disable=SC1091
+    source automated-config.sh
+    # shellcheck disable=SC1090
+    source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
+
+    # shellcheck disable=SC1091
+    source automated-extras-config.sh
+
+    PING_TARGETS=()
+
+    declare arg
 
     while [[ "${#}" -gt 0 ]]; do
-
-        [[ "${#args[@]}" -gt 0 ]] || break
 
         arg="${1}"
         shift
@@ -117,59 +79,34 @@ local_main () {
                 ;;
 
             *)
-                declare -g "${args[0]}"="${arg}"
-
-                args=("${args[@]:1}")
+                export RIEMANN_SERVER="${arg}"
+                break
                 ;;
         esac
     done
 
-    [[ "${#PING_TARGETS[@]}" -gt 0 ]] || throw "At least one ping target is required"
-
-    PASS_NAMESPACE="${PASS_NAMESPACE:-CA/${CA_NAME}}"
-    CA_DIR="${CA_DIR:-${HOME%/}/CA}"
-    PKI_DIR="${PKI_DIR:-${CA_DIR%/}/${CA_NAME}/pki}"
-
-    export -f decrypted_rsa_key
-    export -f drag_ssl_files
     export -f ping_targets
 
-    export CA_NAME
-    export RIEMANN_SERVER
-
+    # shellcheck disable=SC2016
     exec automated.sh \
          -s \
-         -e CA_NAME \
          -e RIEMANN_SERVER \
-         -e PING_TARGETS \
-         -m "drag_ssl_files \"\${target}\" $(quoted "${PASS_NAMESPACE}") $(quoted "${PKI_DIR}")" \
+         -m 'riemann-ssl-files-macro.sh "${target}"' \
          -m "ping_targets $(quoted "${PING_TARGETS[@]}")" \
          -l "${BASH_SOURCE[0]}" \
+         -l "${AUTOMATED_EXTRAS_LIBDIR}" \
          "${@}"
-
-    echo "${@}"
-}
-
-
-# For convenience this file is structured in such a way that the locally executed
-# functions are above this block and the remotely executed functions are below
-if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
-
-    # Source some useful functions like throw
-
-    # shellcheck disable=SC1091
-    source automated-config.sh
-    # shellcheck disable=SC1090
-    source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
-
-    local_main "${@}"
 fi
 
 
+DEST_DIR=/opt/riemann-fping
+FPING_INTERVAL=10
+
+
 drop_ssl_files () {
-    drop ssl-key "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-fping-client.key" 0600
-    drop ssl-cert "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-fping-client.crt" 0644
-    drop ssl-cacert "${FACT_PKI_CERTS%/}/${CA_NAME}.crt" 0644
+    drop riemann-ssl-key "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-fping-client.key" 0600
+    drop riemann-ssl-cert "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-fping-client.crt" 0644
+    drop riemann-ssl-cacert "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-fping-ca.crt" 0644
 }
 
 riemann_fping_systemd_service () {
@@ -246,7 +183,7 @@ setup_riemann_fping () {
         "${FPING_INTERVAL}" \
         "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-fping-client.key" \
         "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-fping-client.crt" \
-        "${FACT_PKI_CERTS%/}/${CA_NAME}.crt" \
+        "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-fping-ca.crt" \
         "${PING_TARGETS[@]}" | to_file "/etc/systemd/system/${service_name}.service" refresh_systemd_service
 
     service_ensure enabled "${service_name}"

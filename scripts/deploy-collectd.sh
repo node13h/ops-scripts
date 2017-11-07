@@ -3,114 +3,23 @@
 # MIT license
 # Copyright 2017 Sergej Alikov <sergej.alikov@gmail.com>
 
-
 set -euo pipefail
-
-POSITIONAL_ARGS=('CA_NAME' 'RIEMANN_SERVER')
 
 
 display_usage_and_exit () {
     cat <<EOF
-Usage: ${0} ${POSITIONAL_ARGS[*]//_/-} [AUTOMATED-ARGS]
+Usage: ${0} RIEMANN-SERVER [AUTOMATED-ARGS]
 
-automated.sh-based script to deploy the CollectD instance to target(s) and
-configure it to send the data to RIEMANN (over the SSL).
+Deploy the CollectD instance to target(s) and configure it to send
+the data to a RIEMANN instance (over the SSL).
 
-This script will decrypt the SSL keys on the fly using the pass
-tool (https://www.passwordstore.org/).
+AUTOMATING
 
-ENVIRONMENT VARIABLES
-        PASS_NAMESPACE          'pass' utility namespace to look for
-                                the key passwords in. The script will use
-                                the PASS_NAMESPACE/CA_NAME/TARGET path to look
-                                for the password.
-        CA_DIR                  Base directory containing the CAs (easyrsa
-                                directory layout). Used to produce the
-                                default value of PKI_DIR.
-        PKI_DIR                 Directory to look for the SSL keys and
-                                certificates in. Derived from the CA_DIR by
-                                default. Keys are expeted at PKI_DIR/private
-                                and certificates are expected at PKI_DIR/issued.
+        Run riemann-ssl-files-macro.sh --help to see more help on
+        environment variables.
 EOF
 
     exit "${1:-0}"
-}
-
-decrypted_rsa_key () {
-    local key_file="${1}"
-    local passphrase="${2}"
-
-    openssl rsa -passin stdin -in "${key_file}" <<< "${passphrase}"
-}
-
-drag_ssl_files () {
-    local target="${1}"
-    local pass_namespace="${2}"
-    local pki_dir="${3}"
-
-    local passphrase cacert cert key pass_name address
-
-    address=$(target_address_only "${target}")
-
-    cacert="${pki_dir%/}/ca.crt"
-    cert="${pki_dir%/}/issued/${address}.crt"
-    key="${pki_dir%/}/private/${address}.key"
-    pass_name="${pass_namespace%/}/${address}"
-
-    passphrase=$(pass "${pass_name}")
-
-    file_as_function <(decrypted_rsa_key "${key}" "${passphrase}") ssl-key
-    file_as_function "${cert}" ssl-cert
-    file_as_function "${cacert}" ssl-cacert
-}
-
-local_main () {
-    local arg
-
-    local -a args=("${POSITIONAL_ARGS[@]}")
-
-    [[ "${#}" -gt "${#args[@]}" ]] || display_usage_and_exit 1
-
-    while [[ "${#}" -gt 0 ]]; do
-
-        [[ "${#args[@]}" -gt 0 ]] || break
-
-        arg="${1}"
-        shift
-
-        case "${arg}" in
-
-            -h|--help|help|'')
-                display_usage_and_exit
-                ;;
-
-            *)
-                declare -g "${args[0]}"="${arg}"
-
-                args=("${args[@]:1}")
-                ;;
-        esac
-    done
-
-    PASS_NAMESPACE="${PASS_NAMESPACE:-CA/${CA_NAME}}"
-    CA_DIR="${CA_DIR:-${HOME%/}/CA}"
-    PKI_DIR="${PKI_DIR:-${CA_DIR%/}/${CA_NAME}/pki}"
-
-    export -f decrypted_rsa_key
-    export -f drag_ssl_files
-
-    export CA_NAME
-    export RIEMANN_SERVER
-
-    exec automated.sh \
-         -s \
-         -e CA_NAME \
-         -e RIEMANN_SERVER \
-         -m "drag_ssl_files \"\${target}\" $(quoted "${PASS_NAMESPACE}") $(quoted "${PKI_DIR}")" \
-         -l "${BASH_SOURCE[0]}" \
-         "${@}"
-
-    echo "${@}"
 }
 
 
@@ -118,22 +27,31 @@ local_main () {
 # functions are above this block and the remotely executed functions are below
 if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
 
-    # Source some useful functions like throw
+    [[ "${#}" -gt 1 ]] || display_usage_and_exit 1
 
     # shellcheck disable=SC1091
-    source automated-config.sh
-    # shellcheck disable=SC1090
-    source "${AUTOMATED_LIBDIR%/}/libautomated.sh"
+    source automated-extras-config.sh
 
-    local_main "${@}"
+    export RIEMANN_SERVER="${1}"
+    shift
+
+    # shellcheck disable=SC2016
+    exec automated.sh \
+         -s \
+         -e RIEMANN_SERVER \
+         -m 'riemann-ssl-files-macro.sh "${target}"' \
+         -l "${BASH_SOURCE[0]}" \
+         -l "${AUTOMATED_EXTRAS_LIBDIR}" \
+         "${@}"
+
 fi
 
 declare -A SYSTEMCTL_ACTIONS
 
 drop_ssl_files () {
-    drop ssl-key "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" 0600
-    drop ssl-cert "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-client.crt" 0644
-    drop ssl-cacert "${FACT_PKI_CERTS%/}/${CA_NAME}.crt" 0644
+    drop riemann-ssl-key "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" 0600
+    drop riemann-ssl-cert "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-client.crt" 0644
+    drop riemann-ssl-cacert "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-ca.crt" 0644
 }
 
 collectd_sys_config () {
@@ -218,7 +136,7 @@ setup_collectd () {
             "${RIEMANN_SERVER}" \
             "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" \
             "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-client.crt" \
-            "${FACT_PKI_CERTS%/}/${CA_NAME}.crt"
+            "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-ca.crt"
     )
 
     cmd systemctl enable collectd
