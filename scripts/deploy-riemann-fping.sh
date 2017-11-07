@@ -148,7 +148,7 @@ refresh_systemd_service () {
 
     cmd systemctl daemon-reload
 
-    ! systemctl -q is-active "${service_name}" || cmd systemctl restart "${service_name}"
+    cmd systemctl try-restart "${service_name}"
 }
 
 setup_riemann_fping () {
