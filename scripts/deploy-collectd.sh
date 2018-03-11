@@ -47,6 +47,22 @@ if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
 fi
 
 declare -A SYSTEMCTL_ACTIONS
+declare -a COLLECTD_PACKAGES
+declare COLLECTD_CONFD_DIR
+
+case "${FACT_OS_FAMILY}" in
+    RedHat)
+        COLLECTD_PACKAGES=(collectd collectd-write_riemann collectd-sensors)
+        COLLECTD_CONFD_DIR='/etc/collectd.d'
+        ;;
+    Debian)
+        COLLECTD_PACKAGES=(collectd)
+        COLLECTD_CONFD_DIR='/etc/collectd/collectd.conf.d'
+        ;;
+    *)
+        throw "Unsupported operating system!"
+        ;;
+esac
 
 drop_ssl_files () {
     drop riemann-ssl-key "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" 0600
@@ -118,20 +134,41 @@ handle_riemann_config_change () {
     ! systemctl -q is-active collectd || SYSTEMCTL_ACTIONS[collectd]=try-restart
 }
 
+handle_apt_update () {
+    cmd apt-get update
+}
+
+add_collectd_apt_key () {
+    wget -qO - https://pkg.ci.collectd.org/pubkey.asc | cmd apt-key add -
+}
+
 setup_collectd () {
     msg "Setting up CollectD"
 
-    packages_ensure present collectd collectd-write_riemann collectd-sensors
+    if [[ "${FACT_OS_FAMILY}" = "Debian" ]]; then
+        case "${FACT_OS_VERSION}" in
+            14\.04)
+                add_collectd_apt_key
+                to_file "/etc/apt/sources.list.d/pkg.ci.collectd.org.list" handle_apt_update <<< "deb http://pkg.ci.collectd.org/deb trusty collectd-5.8"
+                ;;
+            16\.04)
+                add_collectd_apt_key
+                to_file "/etc/apt/sources.list.d/pkg.ci.collectd.org.list" handle_apt_update <<< "deb http://pkg.ci.collectd.org/deb xenial collectd-5.8"
+                ;;
+        esac
+    fi
+
+    packages_ensure present "${COLLECTD_PACKAGES[@]}"
 
     if [[ "${FACT_OS_FAMILY}" = "RedHat" ]]; then
         cmd setsebool -P collectd_tcp_network_connect 1
     fi
 
-    to_file /etc/collectd.d/sys.conf handle_riemann_config_change < <(collectd_sys_config)
-    to_file /etc/collectd.d/interface.conf handle_riemann_config_change < <(collectd_interface_config)
+    to_file "${COLLECTD_CONFD_DIR%/}/sys.conf" handle_riemann_config_change < <(collectd_sys_config)
+    to_file "${COLLECTD_CONFD_DIR%/}/interface.conf" handle_riemann_config_change < <(collectd_interface_config)
 
     # shellcheck disable=SC2153
-    to_file /etc/collectd.d/riemann.conf handle_riemann_config_change < <(
+    to_file "${COLLECTD_CONFD_DIR%/}/riemann.conf" handle_riemann_config_change < <(
         collectd_riemann_write_config \
             "${RIEMANN_SERVER}" \
             "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" \
