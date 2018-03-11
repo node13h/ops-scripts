@@ -94,6 +94,8 @@ LoadPlugin interface
 <Plugin "interface">
   Interface "lo"
   Interface "sit0"
+  Interface "/^vnet[0-9]+/"
+  Interface "/^veth/"
   IgnoreSelected true
 </Plugin>
 EOF
