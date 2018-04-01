@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # MIT license
-# Copyright 2017 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright 2018 Sergej Alikov <sergej.alikov@gmail.com>
 #
 
 # Set up an all-in-one Kubernetes cluster on Fedora
