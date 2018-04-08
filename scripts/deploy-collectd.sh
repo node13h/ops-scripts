@@ -46,7 +46,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && "${0}" = "${BASH_SOURCE[0]}" ]]; then
 
 fi
 
-declare -A SYSTEMCTL_ACTIONS
+declare -A SYSTEMCTL_ACTIONS=()
 declare -a COLLECTD_PACKAGES
 declare COLLECTD_CONFD_DIR
 
