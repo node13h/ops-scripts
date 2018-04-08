@@ -16,7 +16,7 @@
 #
 # OVERLAY_NETWORK_CIDR [string]
 # KUBE_CLUSTER_CIDR [string]
-# TRUSTED_SOURCES [array]
+# KUBE_TRUSTED_SOURCES [array]
 #
 
 set -eu
@@ -100,7 +100,7 @@ fi
 OVERLAY_NETWORK_CIDR="${OVERLAY_NETWORK_CIDR:-10.0.0.0/16}"
 KUBE_CLUSTER_CIDR="${KUBE_CLUSTER_CIDR:-10.1.0.0/16}"
 
-declare -a TRUSTED_SOURCES="${TRUSTED_SOURCES:-()}"
+declare -a KUBE_TRUSTED_SOURCES="${KUBE_TRUSTED_SOURCES:-()}"
 
 declare -A SYSTEMCTL_ACTIONS=()
 
@@ -360,8 +360,8 @@ setup_kubernetes () {
 
     cmd firewall-cmd --add-port=6443/tcp
 
-    if [[ "${#TRUSTED_SOURCES[@]}" -gt 0 ]]; then
-        for trusted_source in "${TRUSTED_SOURCES[@]}"; do
+    if [[ "${#KUBE_TRUSTED_SOURCES[@]}" -gt 0 ]]; then
+        for trusted_source in "${KUBE_TRUSTED_SOURCES[@]}"; do
             cmd firewall-cmd --zone=trusted --add-source="${trusted_source}"
         done
     fi
