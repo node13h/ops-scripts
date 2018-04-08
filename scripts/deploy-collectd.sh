@@ -54,10 +54,12 @@ case "${FACT_OS_FAMILY}" in
     RedHat)
         COLLECTD_PACKAGES=(collectd collectd-write_riemann collectd-sensors)
         COLLECTD_CONFD_DIR='/etc/collectd.d'
+        COLLECTD_CONF='/etc/collectd.conf'
         ;;
     Debian)
         COLLECTD_PACKAGES=(collectd)
         COLLECTD_CONFD_DIR='/etc/collectd/collectd.conf.d'
+        COLLECTD_CONF='/etc/collectd/collectd.conf'
         ;;
     *)
         throw "Unsupported operating system!"
@@ -68,6 +70,13 @@ drop_ssl_files () {
     drop riemann-ssl-key "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" 0600
     drop riemann-ssl-cert "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-client.crt" 0644
     drop riemann-ssl-cacert "${FACT_PKI_CERTS%/}/${RIEMANN_SERVER}-collectd-ca.crt" 0644
+}
+
+collectd_conf () {
+    cat <<EOF
+LoadPlugin syslog
+Include "${COLLECTD_CONFD_DIR}"
+EOF
 }
 
 collectd_sys_config () {
@@ -165,6 +174,8 @@ setup_collectd () {
     if [[ "${FACT_OS_FAMILY}" = "RedHat" ]]; then
         cmd setsebool -P collectd_tcp_network_connect 1
     fi
+
+    to_file "${COLLECTD_CONF}" handle_riemann_config_change < <(collectd_conf)
 
     to_file "${COLLECTD_CONFD_DIR%/}/sys.conf" handle_riemann_config_change < <(collectd_sys_config)
     to_file "${COLLECTD_CONFD_DIR%/}/interface.conf" handle_riemann_config_change < <(collectd_interface_config)
