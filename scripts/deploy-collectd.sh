@@ -141,7 +141,7 @@ LoadPlugin write_riemann
 EOF
 }
 
-handle_riemann_config_change () {
+handle_collectd_config_change () {
     ! systemctl -q is-active collectd || SYSTEMCTL_ACTIONS[collectd]=try-restart
 }
 
@@ -175,13 +175,13 @@ setup_collectd () {
         cmd setsebool -P collectd_tcp_network_connect 1
     fi
 
-    to_file "${COLLECTD_CONF}" handle_riemann_config_change < <(collectd_conf)
+    to_file "${COLLECTD_CONF}" handle_collectd_config_change < <(collectd_conf)
 
-    to_file "${COLLECTD_CONFD_DIR%/}/sys.conf" handle_riemann_config_change < <(collectd_sys_config)
-    to_file "${COLLECTD_CONFD_DIR%/}/interface.conf" handle_riemann_config_change < <(collectd_interface_config)
+    to_file "${COLLECTD_CONFD_DIR%/}/sys.conf" handle_collectd_config_change < <(collectd_sys_config)
+    to_file "${COLLECTD_CONFD_DIR%/}/interface.conf" handle_collectd_config_change < <(collectd_interface_config)
 
     # shellcheck disable=SC2153
-    to_file "${COLLECTD_CONFD_DIR%/}/riemann.conf" handle_riemann_config_change < <(
+    to_file "${COLLECTD_CONFD_DIR%/}/riemann.conf" handle_collectd_config_change < <(
         collectd_riemann_write_config \
             "${RIEMANN_SERVER}" \
             "${FACT_PKI_KEYS%/}/${RIEMANN_SERVER}-collectd-client.key" \
