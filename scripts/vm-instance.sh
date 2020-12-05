@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # MIT license
-# Copyright 2017 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright 2020 Sergej Alikov <sergej.alikov@gmail.com>
 
 _DOC='Create or destroy a cloud image-based VM instance on a Linux KVM host (libvirt)'
 
