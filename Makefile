@@ -1,7 +1,7 @@
 VERSION := $(shell cat VERSION)
 RELEASE_BRANCH := master
 
-SCRIPTS := OS deploy-collectd.sh deploy-riemann-fping.sh deploy-kubernetes.sh
+SCRIPTS := OS deploy-collectd.sh deploy-riemann-fping.sh deploy-kubernetes.sh vm-instance.sh
 
 PREFIX := /usr/local
 BINDIR = $(PREFIX)/bin
