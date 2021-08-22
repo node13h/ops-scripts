@@ -169,6 +169,7 @@ if ! (return 2> /dev/null); then
          -l "$CONFIG_FILE" \
          -l "${BASH_SOURCE[0]}" \
          -c main \
+         -- \
          "$@"
 fi
 
