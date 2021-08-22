@@ -161,7 +161,6 @@ if ! (return 2> /dev/null); then
 
     # shellcheck disable=SC2016
     exec automated.sh \
-         -s \
          -e ACTION \
          -e DESTROY_DISKS \
          -l "${AUTOMATED_EXTRAS_LIBDIR}/automated-extras-config.sh" \
