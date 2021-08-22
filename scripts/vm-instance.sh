@@ -45,9 +45,20 @@ INSTANCE_RAM_MB=2048
 instance_user_data () {
   cat <<EOF
 #cloud-config
-password: passw0rd
-chpasswd: { expire: False }
-ssh_pwauth: True
+users:
+  - name: myuser
+    gecos: My Custom User
+    primary_group: myuser
+    groups: wheel
+    lock_passwd: false
+    passwd: <PASSWORD-HASH-HERE>
+    ssh_authorized_keys:
+      - <SSH-PUBLIC-KEY-HERE>
+packages:
+  - python3
+  - tmux
+  - system-release
+  - patch
 EOF
 }
 ---- 8< cut here 8<----------------
