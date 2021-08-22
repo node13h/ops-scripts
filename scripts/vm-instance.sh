@@ -107,7 +107,8 @@ if ! (return 2> /dev/null); then
         shift
     done
 
-    # shellcheck disable=SC2034
+    [[ "$#" -gt 2 ]] || usage 1
+
     ACTION="$1"
     CONFIG_FILE="$2"
 
