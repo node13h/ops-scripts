@@ -72,6 +72,11 @@ EOM
 
 
 if ! (return 2> /dev/null); then
+    # shellcheck disable=SC1091
+    source automated-config.sh
+
+    # shellcheck disable=SC1091,SC1090
+    source "${AUTOMATED_LIBDIR}/libautomated.sh"
 
     if ! command -v automated-config.sh >/dev/null; then
         echo "Please install automated from https://github.com/node13h/automated" >&2
@@ -166,8 +171,8 @@ if ! (return 2> /dev/null); then
          -l "${AUTOMATED_EXTRAS_LIBDIR}/automated-extras-config.sh" \
          -l "${AUTOMATED_EXTRAS_LIBDIR}/automated-extras.sh" \
          -l "${AUTOMATED_EXTRAS_LIBDIR}/os.sh" \
-         -l "$CONFIG_FILE" \
          -l "${BASH_SOURCE[0]}" \
+         -l "$CONFIG_FILE" \
          -c main \
          -- \
          "$@"
