@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # MIT license
-# Copyright 2020 Sergej Alikov <sergej.alikov@gmail.com>
+# Copyright 2020-2021 Sergej Alikov <sergej.alikov@gmail.com>
 
 _DOC='Create or destroy a cloud image-based VM instance on a Linux KVM host (libvirt)'
 
@@ -9,19 +9,24 @@ set -euo pipefail
 
 
 usage () {
+    exit_code="${1:-0}"
+    error_message="${2:-}"
+
+    if [[ -n "$error_message" ]]; then
+        printf 'ERROR: %s\n\n' "$error_message" >&2
+    fi
+
     cat <<EOM
 ${_DOC}
 
-Usage: ${0} FLAGS create|destroy INSTANCE-CONFIG-FILE TARGET
+Usage: ${0} FLAGS create|destroy CONFIG-FILE AUTOMATED-ARGS
        ${0} --help
 
 FLAGS
   --yes                   Automatically approve the destroy action
   --destroy-disks-please  When destroying a VM destroy disks too
 
-TARGET format is [user@]kvm.host.address[:port]
-
-INSTANCE-CONFIG-FILE example:
+CONFIG-FILE example:
 
 ---- 8< cut here 8<----------------
 INSTANCE_NAME=test
@@ -32,6 +37,7 @@ INSTANCE_GW=192.168.100.1
 INSTANCE_DNS1=1.1.1.1
 INSTANCE_DNS2=8.8.8.8
 INSTANCE_CLOUD_IMAGE=CentOS-8-GenericCloud-8.2.2004-20200611.2.x86_64.qcow2
+# INSTANCE_ROOT_VG=vg0
 INSTANCE_ROOT_VOLUME_SIZE=12G
 INSTANCE_OS_VARIANT=centos8
 INSTANCE_RAM_MB=2048
@@ -39,9 +45,20 @@ INSTANCE_RAM_MB=2048
 instance_user_data () {
   cat <<EOF
 #cloud-config
-password: passw0rd
-chpasswd: { expire: False }
-ssh_pwauth: True
+users:
+  - name: myuser
+    gecos: My Custom User
+    primary_group: myuser
+    groups: wheel
+    lock_passwd: false
+    passwd: <PASSWORD-HASH-HERE>
+    ssh_authorized_keys:
+      - <SSH-PUBLIC-KEY-HERE>
+packages:
+  - python3
+  - tmux
+  - system-release
+  - patch
 EOF
 }
 ---- 8< cut here 8<----------------
@@ -49,13 +66,17 @@ EOF
 Note: the image specified in INSTANCE_CLOUD_IMAGE must already exist in /var/lib/libvirt/images.
 
 EOM
+
+    exit "$exit_code"
 }
 
 
 if ! (return 2> /dev/null); then
+    # shellcheck disable=SC1091
+    source automated-config.sh
 
-    AUTO_APPROVE=FALSE
-    DESTROY_DISKS=FALSE
+    # shellcheck disable=SC1091,SC1090
+    source "${AUTOMATED_LIBDIR}/libautomated.sh"
 
     if ! command -v automated-config.sh >/dev/null; then
         echo "Please install automated from https://github.com/node13h/automated" >&2
@@ -67,22 +88,13 @@ if ! (return 2> /dev/null); then
         exit 1
     fi
 
-    # shellcheck disable=SC1091
-    source automated-config.sh
-
-    # shellcheck disable=SC1091,SC1090
-    source "${AUTOMATED_LIBDIR}/libautomated.sh"
-
-    if [[ "$#" -eq 0 ]]; then
-        usage >&2
-        exit 1
-    fi
+    AUTO_APPROVE=FALSE
+    DESTROY_DISKS=FALSE
 
     while [[ "$#" -gt 0 ]]; do
 
         case "$1" in
             --help) usage
-                    exit 0
                     ;;
             --yes)
                 # shellcheck disable=SC2034
@@ -100,17 +112,18 @@ if ! (return 2> /dev/null); then
         shift
     done
 
-    # shellcheck disable=SC2034
-    INSTANCE_ACTION="$1"
-    INSTANCE_CONFIG="$2"
+    [[ "$#" -gt 2 ]] || usage 1
+
+    ACTION="$1"
+    CONFIG_FILE="$2"
 
     shift 2
 
-    if ! [[ "$INSTANCE_ACTION" =~ (create|destroy) ]]; then
-        throw "Unrecognized action ${INSTANCE_ACTION}"
+    if ! [[ "$ACTION" =~ (create|destroy) ]]; then
+        usage 1 "Unrecognized action ${ACTION}"
     fi
 
-    if [[ "$INSTANCE_ACTION" == 'destroy' ]] && ! is_true "$AUTO_APPROVE"; then
+    if [[ "$ACTION" == 'destroy' ]] && ! is_true "$AUTO_APPROVE"; then
         read -r -p 'Type yes to continue: '
         if ! [[ "$REPLY" == 'yes' ]]; then
             echo 'Aborting' >&2
@@ -121,20 +134,47 @@ if ! (return 2> /dev/null); then
     # shellcheck disable=SC1091
     source automated-extras-config.sh
 
-    export INSTANCE_ACTION
+    # Config defaults
+    INSTANCE_ROOT_VG=vg0
+
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+
+    declare -a required_vars=(
+        INSTANCE_NAME
+        INSTANCE_ID
+        INSTANCE_NETWORK_BRIDGE
+        INSTANCE_IP
+        INSTANCE_GW
+        INSTANCE_DNS1
+        INSTANCE_DNS2
+        INSTANCE_CLOUD_IMAGE
+        INSTANCE_ROOT_VOLUME_SIZE
+        INSTANCE_OS_VARIANT
+        INSTANCE_RAM_MB
+    )
+
+    declare var
+    for var in "${required_vars[@]}"; do
+        if ! [[ -v "$var" ]]; then
+            printf 'ERROR: Required config variable %s is not set!' "$var" >&2
+        fi
+    done
+
+    export ACTION
     export DESTROY_DISKS
 
     # shellcheck disable=SC2016
     exec automated.sh \
-         -s \
-         -e INSTANCE_ACTION \
+         -e ACTION \
          -e DESTROY_DISKS \
          -l "${AUTOMATED_EXTRAS_LIBDIR}/automated-extras-config.sh" \
          -l "${AUTOMATED_EXTRAS_LIBDIR}/automated-extras.sh" \
          -l "${AUTOMATED_EXTRAS_LIBDIR}/os.sh" \
-         -l "$INSTANCE_CONFIG" \
          -l "${BASH_SOURCE[0]}" \
+         -l "$CONFIG_FILE" \
          -c main \
+         -- \
          "$@"
 fi
 
@@ -142,14 +182,19 @@ fi
 # Everything beyond this point will only be executed on the target (see exec above)
 
 
-supported_automated_versions 0.2
-supported_automated_extras_versions 0.2
+supported_automated_versions 0.3
+supported_automated_extras_versions 0.3
 
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf -- "${TEMP_DIR%/}/seed_image"; rmdir "$TEMP_DIR"' EXIT
 
 IMAGES_DIR=/var/lib/libvirt/images/
-VM_VG=vg0
+
+
+# This function may be overridden in the config file
+instance_user_data () {
+    echo
+}
 
 
 create_seed_image () {
@@ -179,7 +224,7 @@ ethernets:
             - ${INSTANCE_DNS2}
 EOF
 
-    cmd genisoimage \
+    genisoimage \
         -output "$image_path" \
         -input-charset utf-8 \
         -volid cidata \
@@ -192,54 +237,32 @@ EOF
 
 
 create_instance () {
-    declare -a expected_vars=(
-        INSTANCE_NAME
-        INSTANCE_ID
-        INSTANCE_NETWORK_BRIDGE
-        INSTANCE_IP
-        INSTANCE_GW
-        INSTANCE_DNS1
-        INSTANCE_DNS2
-        INSTANCE_CLOUD_IMAGE
-        INSTANCE_ROOT_VOLUME_SIZE
-        INSTANCE_OS_VARIANT
-        INSTANCE_RAM_MB
-    )
+    os_packages_ensure present genisoimage lvm2
 
-    declare var
-    for var in "${expected_vars[@]}"; do
-        [[ -v "$var" ]] || throw "Please set the ${var} variable!"
-    done
-
-    if ! declare -f instance_user_data >/dev/null; then
-       throw "Please define the instance_user_data function!"
-    fi
-
-    packages_ensure present genisoimage
-
-    cmd mkdir -p "$IMAGES_DIR"
+    mkdir -p "$IMAGES_DIR"
 
     declare seed_image_file="${IMAGES_DIR%/}/vm-${INSTANCE_NAME}-seed.iso"
     if [[ -e "$seed_image_file" ]]; then
         throw "${seed_image_file} already exists!"
     fi
 
-    msg "Creating the ${seed_image_file} metadata disk image"
+    log_info "Creating the ${seed_image_file} metadata disk image"
     create_seed_image "$seed_image_file"
 
+    # TODO: Support both file-based and LVM-based disk images
     declare instance_lv="vm-${INSTANCE_NAME}-hdd0"
-    declare instance_lv_dev="/dev/${VM_VG}/${instance_lv}"
+    declare instance_lv_dev="/dev/${INSTANCE_ROOT_VG}/${instance_lv}"
 
-    if lvm lvs "${VM_VG}/${instance_lv}" &>/dev/null || [[ -e "$instance_lv_dev" ]]; then
-        throw "${VM_VG}/${instance_lv} LV already exists!"
+    if lvm lvs "${INSTANCE_ROOT_VG}/${instance_lv}" &>/dev/null || [[ -e "$instance_lv_dev" ]]; then
+        throw "${INSTANCE_ROOT_VG}/${instance_lv} LV already exists!"
     fi
 
-    msg "Creating the ${VM_VG}/${instance_lv} LVM volume"
-    cmd lvcreate -L "$INSTANCE_ROOT_VOLUME_SIZE" -n "$instance_lv" "$VM_VG"
-    cmd qemu-img convert -f qcow2 -O raw "${IMAGES_DIR%/}/${INSTANCE_CLOUD_IMAGE}" "$instance_lv_dev"
+    log_info "Creating the ${INSTANCE_ROOT_VG}/${instance_lv} LVM volume"
+    lvcreate -L "$INSTANCE_ROOT_VOLUME_SIZE" -n "$instance_lv" "$INSTANCE_ROOT_VG"
+    qemu-img convert -O raw "${IMAGES_DIR%/}/${INSTANCE_CLOUD_IMAGE}" "$instance_lv_dev"
 
-    msg "Creating the ${INSTANCE_NAME} instance"
-    cmd virt-install \
+    log_info "Creating the ${INSTANCE_NAME} instance"
+    virt-install \
         --connect qemu:///system \
         --hvm \
         --name "$INSTANCE_NAME" \
@@ -256,52 +279,52 @@ create_instance () {
 
 
 destroy_instance () {
-    declare -a expected_vars=(
+    declare -a required_vars=(
         INSTANCE_NAME
     )
 
     declare var
-    for var in "${expected_vars[@]}"; do
+    for var in "${required_vars[@]}"; do
         [[ -v "$var" ]] || throw "Please set the ${var} variable!"
     done
 
     declare seed_image_file="${IMAGES_DIR%/}/vm-${INSTANCE_NAME}-seed.iso"
 
     declare instance_lv="vm-${INSTANCE_NAME}-hdd0"
-    declare instance_lv_dev="/dev/${VM_VG}/${instance_lv}"
+    declare instance_lv_dev="/dev/${INSTANCE_ROOT_VG}/${instance_lv}"
 
     if virsh -q list --state-running \
             | awk '{print $2}' \
             | grep "^${INSTANCE_NAME}$" >/dev/null; then
 
-        msg "Destroying the ${INSTANCE_NAME} instance"
-        cmd virsh destroy "$INSTANCE_NAME"
+        log_info "Destroying the ${INSTANCE_NAME} instance"
+        virsh destroy "$INSTANCE_NAME"
     fi
 
     if virsh -q list --all \
             | awk '{print $2}' \
             | grep "^${INSTANCE_NAME}$" >/dev/null; then
 
-        msg "De-registering the ${INSTANCE_NAME} instance"
-        cmd virsh undefine "$INSTANCE_NAME"
+        log_info "De-registering the ${INSTANCE_NAME} instance"
+        virsh undefine "$INSTANCE_NAME"
     fi
 
     if is_true "$DESTROY_DISKS"; then
-        if lvm lvs "${VM_VG}/${instance_lv}" &>/dev/null || [[ -e "$instance_lv_dev" ]]; then
-            msg "Destroying the ${VM_VG}/${instance_lv} VM volume"
-            cmd lvremove -f "${VM_VG}/${instance_lv}"
+        if lvm lvs "${INSTANCE_ROOT_VG}/${instance_lv}" &>/dev/null || [[ -e "$instance_lv_dev" ]]; then
+            log_info "Destroying the ${INSTANCE_ROOT_VG}/${instance_lv} VM volume"
+            lvremove -f "${INSTANCE_ROOT_VG}/${instance_lv}"
         fi
     fi
 
     if [[ -e "$seed_image_file" ]]; then
-        msg "Deleting the ${seed_image_file} metadata disk image"
-        cmd rm -f -- "$seed_image_file"
+        log_info "Deleting the ${seed_image_file} metadata disk image"
+        rm -f -- "$seed_image_file"
     fi
 }
 
 
 main () {
-    case "$INSTANCE_ACTION" in
+    case "$ACTION" in
         create)
             create_instance
             ;;
