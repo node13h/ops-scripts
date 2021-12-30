@@ -33,14 +33,15 @@ INSTANCE_NAME=test
 INSTANCE_ID=f371060a-a886-4076-b61a-d279f7c57c1e
 INSTANCE_NETWORK_BRIDGE=br0
 INSTANCE_IP=192.168.100.100/24
+INSTANCE_MTU=9000
 INSTANCE_GW=192.168.100.1
 INSTANCE_DNS1=1.1.1.1
 INSTANCE_DNS2=8.8.8.8
 INSTANCE_CLOUD_IMAGE=CentOS-8-GenericCloud-8.2.2004-20200611.2.x86_64.qcow2
 # INSTANCE_ROOT_VG=vg0
 INSTANCE_ROOT_VOLUME_SIZE=12G
-INSTANCE_OS_VARIANT=centos8
 INSTANCE_RAM_MB=2048
+INSTANCE_VCPUS=2
 
 instance_user_data () {
   cat <<EOF
@@ -119,9 +120,29 @@ if ! (return 2> /dev/null); then
 
     shift 2
 
-    if ! [[ "$ACTION" =~ (create|destroy) ]]; then
-        usage 1 "Unrecognized action ${ACTION}"
-    fi
+    case "$ACTION" in
+        create)
+            declare -a required_vars=(
+                INSTANCE_NAME
+                INSTANCE_ID
+                INSTANCE_NETWORK_BRIDGE
+                INSTANCE_IP
+                INSTANCE_GW
+                INSTANCE_DNS1
+                INSTANCE_DNS2
+                INSTANCE_CLOUD_IMAGE
+                INSTANCE_ROOT_VOLUME_SIZE
+                INSTANCE_RAM_MB
+                INSTANCE_VCPUS
+            )
+            ;;
+        destroy)
+            declare -a required_vars=(INSTANCE_NAME)
+            ;;
+        *)
+            usage 1 "Unrecognized action ${ACTION}"
+            ;;
+    esac
 
     if [[ "$ACTION" == 'destroy' ]] && ! is_true "$AUTO_APPROVE"; then
         read -r -p 'Type yes to continue: '
@@ -136,28 +157,16 @@ if ! (return 2> /dev/null); then
 
     # Config defaults
     INSTANCE_ROOT_VG=vg0
+    INSTANCE_MTU=1500
 
     # shellcheck disable=SC1090
     source "$CONFIG_FILE"
 
-    declare -a required_vars=(
-        INSTANCE_NAME
-        INSTANCE_ID
-        INSTANCE_NETWORK_BRIDGE
-        INSTANCE_IP
-        INSTANCE_GW
-        INSTANCE_DNS1
-        INSTANCE_DNS2
-        INSTANCE_CLOUD_IMAGE
-        INSTANCE_ROOT_VOLUME_SIZE
-        INSTANCE_OS_VARIANT
-        INSTANCE_RAM_MB
-    )
-
     declare var
     for var in "${required_vars[@]}"; do
         if ! [[ -v "$var" ]]; then
-            printf 'ERROR: Required config variable %s is not set!' "$var" >&2
+            printf 'ERROR: Required config variable %s is not set!\n' "$var" >&2
+            exit 1
         fi
     done
 
@@ -217,6 +226,7 @@ ethernets:
         dhcp6: false
         addresses:
           - ${INSTANCE_IP}
+        mtu: ${INSTANCE_MTU}
         gateway4: ${INSTANCE_GW}
         nameservers:
           addresses:
@@ -233,6 +243,118 @@ EOF
         "${TEMP_DIR%/}/seed_image/user-data" \
         "${TEMP_DIR%/}/seed_image/meta-data" \
         "${TEMP_DIR%/}/seed_image/network-config"
+}
+
+
+domain_xml () {
+    declare instance_lv_dev="$1"
+    declare seed_image_file="$2"
+
+    cat <<EOF
+<domain type='kvm'>
+  <name>${INSTANCE_NAME}</name>
+  <uuid>${INSTANCE_ID}</uuid>
+  <memory unit='MiB'>${INSTANCE_RAM_MB}</memory>
+  <currentMemory unit='MiB'>${INSTANCE_RAM_MB}</currentMemory>
+  <vcpu placement='static'>${INSTANCE_VCPUS}</vcpu>
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-rhel7.0.0'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu mode='host-model' check='partial'>
+    <model fallback='allow'/>
+  </cpu>
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+  <devices>
+    <emulator>/usr/libexec/qemu-kvm</emulator>
+    <disk type='block' device='disk'>
+      <driver name='qemu' type='raw' cache='none' io='native'/>
+      <source dev='${instance_lv_dev}'/>
+      <target dev='vda' bus='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='${seed_image_file}'/>
+      <target dev='hda' bus='ide'/>
+      <readonly/>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </disk>
+    <controller type='usb' index='0' model='ich9-ehci1'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x7'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci1'>
+      <master startport='0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0' multifunction='on'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci2'>
+      <master startport='2'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x1'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci3'>
+      <master startport='4'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x2'/>
+    </controller>
+    <controller type='pci' index='0' model='pci-root'/>
+    <controller type='ide' index='0'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
+    </controller>
+    <controller type='virtio-serial' index='0'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+    </controller>
+    <interface type='bridge'>
+      <source bridge='${INSTANCE_NETWORK_BRIDGE}'/>
+      <model type='virtio'/>
+      <!--
+        TODO: CentOS7 throws "setting MTU is not supported with this QEMU binary", so
+        need to make this conditional.
+        There is still a way to set the MTU on vnet* interfaces - via a udev persistent
+        net rule like this:
+        $ cat /etc/udev/rules.d/70-persistent-net.rules
+        SUBSYSTEM=="net", ACTION=="add", KERNEL=="vnet*", ATTR{mtu}="9000"
+      <mtu size='${INSTANCE_MTU}'/>
+      -->
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+    <serial type='pty'>
+      <target type='isa-serial' port='0'>
+        <model name='isa-serial'/>
+      </target>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+    <channel type='unix'>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+      <address type='virtio-serial' controller='0' bus='0' port='1'/>
+    </channel>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>
+    <memballoon model='virtio'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
+    </memballoon>
+    <rng model='virtio'>
+      <backend model='random'>/dev/urandom</backend>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x08' function='0x0'/>
+    </rng>
+  </devices>
+</domain>
+EOF
 }
 
 
@@ -262,32 +384,13 @@ create_instance () {
     qemu-img convert -O raw "${IMAGES_DIR%/}/${INSTANCE_CLOUD_IMAGE}" "$instance_lv_dev"
 
     log_info "Creating the ${INSTANCE_NAME} instance"
-    virt-install \
-        --connect qemu:///system \
-        --hvm \
-        --name "$INSTANCE_NAME" \
-        --memory "$INSTANCE_RAM_MB" \
-        --disk "${instance_lv_dev},device=disk,bus=virtio" \
-        --disk "${seed_image_file},device=cdrom" \
-        --os-variant "$INSTANCE_OS_VARIANT" \
-        --virt-type kvm \
-        --graphics none \
-        --network "bridge=${INSTANCE_NETWORK_BRIDGE},model=virtio" \
-        --import \
-        --noautoconsole
+
+    virsh define <(domain_xml "$instance_lv_dev" "$seed_image_file")
+    [[ "$(virsh domstate "$INSTANCE_NAME")" == 'running' ]] || virsh start "$INSTANCE_NAME"
 }
 
 
 destroy_instance () {
-    declare -a required_vars=(
-        INSTANCE_NAME
-    )
-
-    declare var
-    for var in "${required_vars[@]}"; do
-        [[ -v "$var" ]] || throw "Please set the ${var} variable!"
-    done
-
     declare seed_image_file="${IMAGES_DIR%/}/vm-${INSTANCE_NAME}-seed.iso"
 
     declare instance_lv="vm-${INSTANCE_NAME}-hdd0"
