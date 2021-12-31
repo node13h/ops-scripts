@@ -329,6 +329,7 @@ domain_xml () {
         SUBSYSTEM=="net", ACTION=="add", KERNEL=="vnet*", ATTR{mtu}="9000"
       <mtu size='${INSTANCE_MTU}'/>
       -->
+      <driver name='vhost' queues='${INSTANCE_VCPUS}'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
     </interface>
     <serial type='pty'>
