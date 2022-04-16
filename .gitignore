@@ -1,3 +1,5 @@
 *~
 bdist/*
 sdist/*
+automated-ops-scripts-config.sh
+lib/automated-ops-scripts.sh

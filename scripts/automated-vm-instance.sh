@@ -89,6 +89,11 @@ if ! (return 2> /dev/null); then
         exit 1
     fi
 
+    if ! command -v automated-ops-scripts-config.sh >/dev/null; then
+        echo "Please install automated-ops-scripts from https://github.com/node13h/automated-ops-scripts" >&2
+        exit 1
+    fi
+
     AUTO_APPROVE=FALSE
     DESTROY_DISKS=FALSE
 
@@ -155,6 +160,9 @@ if ! (return 2> /dev/null); then
     # shellcheck disable=SC1091
     source automated-extras-config.sh
 
+    # shellcheck disable=SC1091
+    source automated-ops-scripts-config.sh
+
     # Config defaults
     INSTANCE_ROOT_VG=vg0
     INSTANCE_MTU=1500
@@ -180,6 +188,7 @@ if ! (return 2> /dev/null); then
          -l "${AUTOMATED_EXTRAS_LIBDIR}/automated-extras-config.sh" \
          -l "${AUTOMATED_EXTRAS_LIBDIR}/automated-extras.sh" \
          -l "${AUTOMATED_EXTRAS_LIBDIR}/os.sh" \
+         -l "${AUTOMATED_OPS_SCRIPTS_LIBDIR}/automated-ops-scripts.sh" \
          -l "${BASH_SOURCE[0]}" \
          -l "$CONFIG_FILE" \
          -c main \
