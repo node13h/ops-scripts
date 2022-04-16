@@ -20,7 +20,7 @@ clean:
 	rm -rf bdist sdist
 
 automated-ops-scripts-config.sh: automated-ops-scripts-config.sh.in
-	sed -e 's~@LIBDIR@~$(LIBDIR)/automated-ops-scripts~g' automated-ops-scripts-config.sh.in >automated-ops-scripts-config.sh
+	sed -e 's~@LIBDIR@~$(LIBDIR)/automated-ops-scripts~g' -e 's~@VERSION@~$(VERSION)~g' automated-ops-scripts-config.sh.in >automated-ops-scripts-config.sh
 
 lib/automated-ops-scripts.sh: lib/automated-ops-scripts.sh.in
 	sed -e 's~@VERSION@~$(VERSION)~g' lib/automated-ops-scripts.sh.in >lib/automated-ops-scripts.sh
@@ -31,6 +31,7 @@ install: build
 	install -m 0755 -d $(DESTDIR)$(BINDIR)
 	install -m 0755 -d $(DESTDIR)$(LIBDIR)/automated-ops-scripts
 	install -m 0755 -d $(DESTDIR)$(DOCSDIR)/automated-ops-scripts
+	install -m 0755 automated-ops-scripts-config.sh $(DESTDIR)$(BINDIR)
 	install -m 0644 lib/*.sh $(DESTDIR)$(LIBDIR)/automated-ops-scripts
 	for script in $(SCRIPTS); do \
 		install -m 0755 "scripts/$${script}" $(DESTDIR)$(BINDIR); \
