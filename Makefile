@@ -1,7 +1,7 @@
 VERSION := $(shell cat VERSION)
 RELEASE_BRANCH := master
 
-SCRIPTS := automated-vm-instance.sh
+SCRIPTS := libvirt-cloud-instance.sh
 
 PREFIX := /usr/local
 BINDIR = $(PREFIX)/bin
