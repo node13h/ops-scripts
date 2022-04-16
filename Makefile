@@ -1,7 +1,7 @@
 VERSION := $(shell cat VERSION)
 RELEASE_BRANCH := master
 
-SCRIPTS := libvirt-cloud-instance.sh
+SCRIPTS := libvirt-cloud-instance.sh secure-block-overlay.sh
 
 PREFIX := /usr/local
 BINDIR = $(PREFIX)/bin
