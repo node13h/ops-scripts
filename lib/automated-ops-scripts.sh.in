@@ -3,14 +3,11 @@
 # MIT license
 # Copyright 2022 Sergej Alikov <sergej.alikov@gmail.com>
 
+
 supported_automated_versions 0.3
 
-
-AUTOMATED_OPS_SCRIPTS_VERSION=@VERSION@
-
-
 supported_automated_ops_scripts_versions () {
-    if ! semver_matches_one_of "$AUTOMATED_OPS_SCRIPTS_VERSION" "$@"; then
-        throw "Unsupported version ${AUTOMATED_OPS_SCRIPTS_VERSION} of Automated ops scripts detected. Supported versions are: $(joined ', ' "$@")"
+    if ! semver_matches_one_of "@VERSION@" "$@"; then
+        throw "Unsupported version @VERSION@ of Automated ops scripts detected. Supported versions are: $(joined ', ' "$@")"
     fi
 }

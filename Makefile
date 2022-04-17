@@ -12,11 +12,11 @@ MANDIR = $(SHAREDIR)/man
 
 .PHONY: install clean uninstall release sdist rpm
 
-all:
-	false
+all: build
 
 clean:
 	rm -f automated-ops-scripts-config.sh
+	rm -f lib/automated-ops-scripts.sh
 	rm -rf bdist sdist
 
 automated-ops-scripts-config.sh: automated-ops-scripts-config.sh.in
